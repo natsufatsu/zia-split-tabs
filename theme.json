@@ -1,0 +1,25 @@
+{
+  "id": "zia-split-tabs",
+  "name": "Zia Split Tabs",
+  "description": "Animated left/right split drop targets and a floating tab preview.",
+  "author": "z1n-k (original Zia)",
+  "version": "1.0.0",
+  "style": {
+    "chrome": "chrome.css"
+  },
+  "scripts": {
+    "zia-split-tabs.uc.js": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    }
+  },
+  "tags": [
+    "chrome",
+    "zen"
+  ],
+  "fork": [
+    "zen"
+  ],
+  "homepage": "https://github.com/natsufatsu/zia-split-tabs"
+}
