@@ -1,9 +1,9 @@
 {
   "id": "zia-split-tabs",
   "name": "Zia Split Tabs",
-  "description": "Animated left/right split drop targets and a floating tab preview.",
+  "description": "Animated left/right split drop targets with Zen's native tab drag preview.",
   "author": "z1n-k (original Zia)",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "style": {
     "chrome": "chrome.css"
   },

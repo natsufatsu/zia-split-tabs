@@ -18,9 +18,9 @@ Restart after enabling, disabling or updating these JavaScript mods. If necessar
 
 The ZIP is a repository-ready package; it is not a Firefox extension/XPI. Repository: https://github.com/natsufatsu/zia-split-tabs
 
-## 1.0.2
+## 1.0.3
 
-Restores the original working 1.0.0 JavaScript and CSS. The 1.0.1 drag optimizations have been reverted because the custom split animation stopped appearing. The original drag-performance limitations may return; this release prioritizes restoring the animation.
+Keeps the animated split targets while using Zen's native dragged-tab preview. Removes the custom screenshot, floating canvas, native drag-image overrides and scroll-tracking actors.
 
 Update the mod in Sine and restart Zen to apply this version.
 

@@ -150,26 +150,3 @@
   }
 }
 
-#zia-split-blank-drag-image {
-  position: fixed;
-  left: -10000px;
-  top: 0;
-  pointer-events: none;
-}
-
-#zia-split-drag-picture {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 10001;
-  display: none;
-  pointer-events: none;
-  border-radius: 7px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-  transition: translate 0.04s linear;
-
-  &[following] {
-    display: block;
-  }
-}
-

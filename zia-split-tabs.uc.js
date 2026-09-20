@@ -4,32 +4,6 @@
   window.__zia_split_tabsLoaded = true;
   const root = document.documentElement;
 
-  const scrollPositions = new WeakMap();
-  window.ziaSplitOnPageScroll = (browser, position) => {
-    if (browser && position) scrollPositions.set(browser, position);
-  };
-  function registerScrollActor() {
-    try {
-      ChromeUtils.registerWindowActor("ZiaSplit", {
-        parent: { esModuleURI: "chrome://sine/content/zia-split-tabs/actors/ZiaSplitParent.sys.mjs" },
-        child: {
-          esModuleURI: "chrome://sine/content/zia-split-tabs/actors/ZiaSplitChild.sys.mjs",
-          events: {
-            scroll: { capture: true, mozSystemGroup: true },
-            DOMContentLoaded: {},
-            pageshow: {},
-          },
-        },
-        allFrames: false,
-        messageManagerGroups: ["browsers"],
-      });
-    } catch (err) {
-      if (err?.name !== "NotSupportedError") {
-        console.error("[Zia] Could not register scroll helper:", err);
-      }
-    }
-  }
-
   const TAB_DROP_TYPE = "application/x-moz-tabbrowser-tab";
   const HTML = "http://www.w3.org/1999/xhtml";
   const MAGNET_SHARE = 0.32;
@@ -50,8 +24,6 @@
     lastSelect: null,
     dragStartedAt: 0,
     side: null,
-    thumb: null,
-    dragImageSet: false,
   };
 
   function draggedTabOf(event) {
@@ -141,108 +113,6 @@
     return overlay;
   }
 
-  const DRAG_PICTURE_W = 200;
-  const DRAG_PICTURE_H = 125;
-  let blankDragImage = null;
-  const lastCursor = { x: 0, y: 0 };
-
-  let lastBlankAt = 0;
-
-  function hideSystemDragImage(dt, force = true) {
-    if (!dt || (!force && Date.now() - lastBlankAt < 250)) {
-      return;
-    }
-    lastBlankAt = Date.now();
-    try {
-      if (!blankDragImage) {
-        blankDragImage = document.createElementNS(HTML, "canvas");
-        blankDragImage.id = "zia-split-blank-drag-image";
-        blankDragImage.width = 32;
-        blankDragImage.height = 32;
-        blankDragImage.getContext("2d").clearRect(0, 0, 32, 32);
-        document.documentElement.appendChild(blankDragImage);
-      }
-      dt.updateDragImage(blankDragImage, 16, 16);
-      splitDrop.dragImageSet = true;
-    } catch (err) {
-    }
-  }
-
-  function movePicture(x, y) {
-    lastCursor.x = x;
-    lastCursor.y = y;
-    const canvas = splitDrop.thumb;
-    if (canvas?.hasAttribute("following")) {
-      canvas.style.translate = `${Math.round(x - DRAG_PICTURE_W / 2)}px ${Math.round(y - DRAG_PICTURE_H / 2)}px`;
-    }
-  }
-
-  async function makeDragPicture(tab) {
-    const width = DRAG_PICTURE_W;
-    const height = DRAG_PICTURE_H;
-    const canvas = splitDrop.thumb || document.createElementNS(HTML, "canvas");
-    canvas.id = "zia-split-drag-picture";
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    if (!canvas.isConnected) {
-      document.documentElement.appendChild(canvas);
-    }
-    splitDrop.thumb = canvas;
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(0.5, 0.5, width - 1, height - 1, 7);
-    ctx.clip();
-    ctx.fillStyle = "#1f1f1f";
-    ctx.fillRect(0, 0, width, height);
-    try {
-      const browser = tab.linkedBrowser;
-      const pageW = browser?.clientWidth;
-      const pageH = browser?.clientHeight;
-      if (!browser?.drawSnapshot || !pageW || !pageH) {
-        throw new Error("page not drawable");
-      }
-      const cover = Math.max(width / pageW, height / pageH);
-      const cropW = width / cover;
-      const cropH = height / cover;
-
-      const scroll = scrollPositions.get(browser) || { x: 0, y: 0 };
-      const bitmap = await browser.drawSnapshot(
-        scroll.x + (pageW - cropW) / 2,
-        scroll.y,
-        cropW,
-        cropH,
-        cover * ratio,
-        "rgb(31, 31, 31)"
-      );
-      if (!bitmap) {
-        throw new Error("no snapshot");
-      }
-      ctx.drawImage(bitmap, 0, 0, width, height);
-      bitmap.close?.();
-    } catch (err) {
-      console.warn("[Zia] Drag picture: couldn't draw the page, showing its icon instead.", err);
-      const icon = new Image();
-      icon.src = tab.getAttribute("image") || "";
-      await icon.decode().catch(() => {});
-      if (icon.naturalWidth) {
-        ctx.drawImage(icon, width / 2 - 12, height / 2 - 12, 24, 24);
-      }
-    }
-    ctx.restore();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(0.5, 0.5, width - 1, height - 1, 7);
-    ctx.stroke();
-    return canvas;
-  }
-
   function showSplitDrop(tab, event) {
     const overlay = ensureSplitOverlay();
     const box = gBrowser.tabbox.getBoundingClientRect();
@@ -252,9 +122,7 @@
     overlay.style.setProperty("--zia-drop-height", `${box.height}px`);
     splitDrop.tab = tab;
     splitDrop.side = null;
-    splitDrop.dragImageSet = false;
 
-    const picture = makeDragPicture(tab);
     const target = splitDrop.target;
     let switched = false;
     const showTarget = () => {
@@ -266,8 +134,8 @@
         gBrowser.selectedTab = target;
       }
     };
-    picture.finally(showTarget);
-    setTimeout(showTarget, 450);
+    // Keep Zen's native drag image; no screenshot needs to finish first.
+    setTimeout(showTarget, 0);
     overlay.setAttribute("open", "true");
 
     requestAnimationFrame(() => {
@@ -276,16 +144,6 @@
       }
     });
 
-    const dt = event.dataTransfer;
-    picture.then((canvas) => {
-      if (splitDrop.tab !== tab || !overlay.hasAttribute("open")) {
-        return;
-      }
-      splitDrop.dataTransfer = dt;
-      hideSystemDragImage(dt);
-      canvas.setAttribute("following", "true");
-      movePicture(lastCursor.x, lastCursor.y);
-    });
   }
 
   function hideSplitDrop(event) {
@@ -295,21 +153,9 @@
     }
     overlay.removeAttribute("shown");
     overlay.removeAttribute("open");
-    splitDrop.thumb?.removeAttribute("following");
     setDropSide(null);
-    if (splitDrop.dragImageSet && event?.dataTransfer) {
-      try {
-        const original = gBrowser.tabContainer.tabDragAndDrop?.originalDragImageArgs;
-        if (original) {
-          event.dataTransfer.updateDragImage(...original);
-        }
-      } catch (err) {
-      }
-    }
     splitDrop.tab = null;
     splitDrop.target = null;
-    splitDrop.dataTransfer = null;
-    splitDrop.dragImageSet = false;
   }
 
   function setDropSide(side, cursorX = 0, cursorY = 0) {
@@ -363,10 +209,6 @@
   }
 
   function followDrag(event) {
-    movePicture(event.clientX, event.clientY);
-    if (splitDrop.thumb?.hasAttribute("following")) {
-      hideSystemDragImage(event.dataTransfer, false);
-    }
     const side = sideAt(event);
     if (side !== splitDrop.side && side) {
       Services.zen?.playHapticFeedback?.();
@@ -506,7 +348,6 @@
 
   function start() {
     Services.prefs.getDefaultBranch("").setBoolPref("zen.splitView.enable-tab-drop", false);
-    registerScrollActor();
     watchSplitDrop();
   }
 
