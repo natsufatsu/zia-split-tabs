@@ -44,9 +44,6 @@
 
   const splitDrop = {
     overlay: null,
-    pageBox: null,
-    frame: null,
-    cursor: null,
     zones: {},
     tab: null,
     target: null,
@@ -149,10 +146,13 @@
   let blankDragImage = null;
   const lastCursor = { x: 0, y: 0 };
 
-  function hideSystemDragImage(dt) {
-    if (!dt || splitDrop.dragImageSet) {
+  let lastBlankAt = 0;
+
+  function hideSystemDragImage(dt, force = true) {
+    if (!dt || (!force && Date.now() - lastBlankAt < 250)) {
       return;
     }
+    lastBlankAt = Date.now();
     try {
       if (!blankDragImage) {
         blankDragImage = document.createElementNS(HTML, "canvas");
@@ -182,7 +182,7 @@
     const height = DRAG_PICTURE_H;
     const canvas = splitDrop.thumb || document.createElementNS(HTML, "canvas");
     canvas.id = "zia-split-drag-picture";
-    const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+    const ratio = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
     canvas.style.width = `${width}px`;
@@ -245,8 +245,7 @@
 
   function showSplitDrop(tab, event) {
     const overlay = ensureSplitOverlay();
-    const box = splitDrop.pageBox || gBrowser.tabbox.getBoundingClientRect();
-    splitDrop.pageBox = box;
+    const box = gBrowser.tabbox.getBoundingClientRect();
     overlay.style.setProperty("--zia-drop-left", `${box.left}px`);
     overlay.style.setProperty("--zia-drop-top", `${box.top}px`);
     overlay.style.setProperty("--zia-drop-width", `${box.width}px`);
@@ -290,10 +289,6 @@
   }
 
   function hideSplitDrop(event) {
-    if (splitDrop.frame !== null) cancelAnimationFrame(splitDrop.frame);
-    splitDrop.frame = null;
-    splitDrop.cursor = null;
-    splitDrop.pageBox = null;
     const overlay = splitDrop.overlay;
     if (!overlay?.hasAttribute("open")) {
       return;
@@ -302,12 +297,11 @@
     overlay.removeAttribute("open");
     splitDrop.thumb?.removeAttribute("following");
     setDropSide(null);
-    const dataTransfer = event?.dataTransfer || splitDrop.dataTransfer;
-    if (splitDrop.dragImageSet && dataTransfer) {
+    if (splitDrop.dragImageSet && event?.dataTransfer) {
       try {
         const original = gBrowser.tabContainer.tabDragAndDrop?.originalDragImageArgs;
         if (original) {
-          dataTransfer.updateDragImage(...original);
+          event.dataTransfer.updateDragImage(...original);
         }
       } catch (err) {
       }
@@ -319,25 +313,22 @@
   }
 
   function setDropSide(side, cursorX = 0, cursorY = 0) {
-    const changed = splitDrop.side !== side;
     splitDrop.side = side;
     const overlay = splitDrop.overlay;
     if (!overlay) {
       return;
     }
-    if (changed) overlay.toggleAttribute("has-side", !!side);
+    overlay.toggleAttribute("has-side", !!side);
     for (const [name, zone] of Object.entries(splitDrop.zones)) {
       const active = name === side;
-      if (changed) zone.toggleAttribute("active", active);
+      zone.toggleAttribute("active", active);
       if (!active) {
-        if (!changed) continue;
         zone.style.setProperty("--zia-zone-tx", "0px");
         zone.style.setProperty("--zia-zone-ty", "0px");
         continue;
       }
 
-      const box = splitDrop.pageBox;
-      if (!box) continue;
+      const box = overlay.getBoundingClientRect();
       const w = Math.min(ZONE_ACTIVE_W, box.width * 0.45);
       const h = Math.min(ZONE_ACTIVE_H, box.height * 0.86);
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -357,7 +348,7 @@
   }
 
   function sideAt(event) {
-    const box = splitDrop.pageBox || gBrowser.tabbox.getBoundingClientRect();
+    const box = gBrowser.tabbox.getBoundingClientRect();
     if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) {
       return null;
     }
@@ -372,18 +363,15 @@
   }
 
   function followDrag(event) {
-    // Keep the latest coordinates, not the native drag event or DataTransfer.
-    splitDrop.cursor = { clientX: event.clientX, clientY: event.clientY };
-    if (splitDrop.frame !== null) return;
-    splitDrop.frame = requestAnimationFrame(() => {
-      splitDrop.frame = null;
-      const cursor = splitDrop.cursor;
-      if (!splitDrop.tab || !cursor) return;
-      const side = sideAt(cursor);
-      if (side !== splitDrop.side && side) Services.zen?.playHapticFeedback?.();
-      movePicture(cursor.clientX, cursor.clientY);
-      setDropSide(side, cursor.clientX, cursor.clientY);
-    });
+    movePicture(event.clientX, event.clientY);
+    if (splitDrop.thumb?.hasAttribute("following")) {
+      hideSystemDragImage(event.dataTransfer, false);
+    }
+    const side = sideAt(event);
+    if (side !== splitDrop.side && side) {
+      Services.zen?.playHapticFeedback?.();
+    }
+    setDropSide(side, event.clientX, event.clientY);
   }
 
   function onSplitDragOver(event) {
@@ -398,8 +386,7 @@
   function onSplitDrop(event) {
     const tab = splitDrop.tab;
     const target = splitDrop.target;
-    // A drop can arrive before the scheduled animation frame.
-    const side = sideAt(event);
+    const side = splitDrop.side;
     event.preventDefault();
     event.stopPropagation();
     hideSplitDrop(event);
@@ -477,8 +464,6 @@
       true
     );
     window.addEventListener("dragend", hideSplitDrop, true);
-    // Close if the window geometry changes; reopen with fresh bounds.
-    window.addEventListener("resize", hideSplitDrop);
 
     gBrowser.tabContainer.addEventListener("TabSelect", (event) => {
       splitDrop.lastSelect = { tab: event.target, previous: event.detail?.previousTab || null, time: Date.now() };
@@ -496,7 +481,7 @@
   }
 
   function isOverPage(event) {
-    const box = splitDrop.pageBox || gBrowser.tabbox.getBoundingClientRect();
+    const box = gBrowser.tabbox.getBoundingClientRect();
     const inPage =
       event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
     return inPage && !isOverCollapsedSidebar(event);

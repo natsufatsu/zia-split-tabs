@@ -3,7 +3,7 @@
   "name": "Zia Split Tabs",
   "description": "Animated left/right split drop targets and a floating tab preview.",
   "author": "z1n-k (original Zia)",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "style": {
     "chrome": "chrome.css"
   },

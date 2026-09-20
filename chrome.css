@@ -6,7 +6,6 @@
   width: var(--zia-drop-width, 0px);
   height: var(--zia-drop-height, 0px);
   z-index: 10000;
-  contain: layout style;
   display: none;
   pointer-events: auto;
 
@@ -33,7 +32,6 @@
   opacity: 0;
   scale: 0.94;
   pointer-events: none;
-  will-change: translate;
   transition:
     width 0.26s var(--zia-zone-ease),
     height 0.26s var(--zia-zone-ease),
@@ -168,7 +166,7 @@
   pointer-events: none;
   border-radius: 7px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-  will-change: translate;
+  transition: translate 0.04s linear;
 
   &[following] {
     display: block;
