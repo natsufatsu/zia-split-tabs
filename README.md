@@ -18,6 +18,12 @@ Restart after enabling, disabling or updating these JavaScript mods. If necessar
 
 The ZIP is a repository-ready package; it is not a Firefox extension/XPI. Repository: https://github.com/natsufatsu/zia-split-tabs
 
+## 1.0.1
+
+Drag visuals update at most once per animation frame, use cached page bounds, and avoid repeated native drag-image updates. Preview resolution is capped to reduce capture cost.
+
+Update the mod in Sine and restart Zen to apply this version.
+
 ## Validation
 
 JavaScript syntax and package dependencies checked locally. Live Zen interaction and visual checks are still required, especially on Windows and Linux.
