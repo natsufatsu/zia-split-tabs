@@ -147,6 +147,7 @@
   }
 
   function hideSplitDrop(event) {
+    restoreNativeTabPreview();
     const overlay = splitDrop.overlay;
     if (!overlay?.hasAttribute("open")) {
       return;
@@ -209,6 +210,8 @@
   }
 
   function followDrag(event) {
+    if (isOverPage(event)) showNativeSplitPreview(event);
+    else restoreNativeTabPreview();
     const side = sideAt(event);
     if (side !== splitDrop.side && side) {
       Services.zen?.playHapticFeedback?.();
@@ -345,6 +348,50 @@
     return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
   }
 
+
+  // Zen's rectangle is created by its private split handler, not by the
+  // normal sidebar drag. Reuse its XUL structure and built-in styling only.
+  function showNativeSplitPreview(event) {
+    if (splitDrop.nativePreview || !splitDrop.tab ||
+        typeof event.dataTransfer?.updateDragImage !== "function") return;
+    if (document.getElementById("zen-split-view-drag-image")) return;
+    const preview = document.createXULElement("vbox");
+    preview.id = "zen-split-view-drag-image";
+    const icon = document.createXULElement("image");
+    icon.setAttribute("src", splitDrop.tab.getAttribute("image") || "chrome://global/skin/icons/defaultFavicon.svg");
+    const label = document.createXULElement("label");
+    label.textContent = splitDrop.tab.label;
+    preview.append(icon, label);
+    document.documentElement.appendChild(preview);
+    splitDrop.nativePreview = preview;
+    splitDrop.nativeTransfer = event.dataTransfer;
+    const dt = event.dataTransfer;
+    // Allow native sidebar drag-style refreshes to finish first.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (splitDrop.nativePreview !== preview || !splitDrop.tab) return;
+      const original = gBrowser.tabContainer.tabDragAndDrop?.originalDragImageArgs;
+      try {
+        dt.updateDragImage(preview, original?.[1] ?? 16, original?.[2] ?? 16);
+        gBrowser.tabContainer.tabDragAndDrop?.clearDragOverVisuals?.();
+      } catch (error) {
+        // The drag can end while the update is queued.
+        restoreNativeTabPreview();
+      }
+    }));
+  }
+
+  function restoreNativeTabPreview() {
+    const preview = splitDrop.nativePreview;
+    if (!preview) return;
+    const dt = splitDrop.nativeTransfer;
+    splitDrop.nativePreview = null;
+    splitDrop.nativeTransfer = null;
+    try {
+      const original = gBrowser.tabContainer.tabDragAndDrop?.originalDragImageArgs;
+      if (original?.length) dt?.updateDragImage(...original);
+    } catch {}
+    preview.remove();
+  }
 
   function start() {
     Services.prefs.getDefaultBranch("").setBoolPref("zen.splitView.enable-tab-drop", false);
