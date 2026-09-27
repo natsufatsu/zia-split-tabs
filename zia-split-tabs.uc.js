@@ -24,6 +24,7 @@
     lastSelect: null,
     dragStartedAt: 0,
     side: null,
+    bounds: null,
   };
 
   function draggedTabOf(event) {
@@ -116,6 +117,7 @@
   function showSplitDrop(tab, event) {
     const overlay = ensureSplitOverlay();
     const box = gBrowser.tabbox.getBoundingClientRect();
+    splitDrop.bounds = box;
     overlay.style.setProperty("--zia-drop-left", `${box.left}px`);
     overlay.style.setProperty("--zia-drop-top", `${box.top}px`);
     overlay.style.setProperty("--zia-drop-width", `${box.width}px`);
@@ -157,6 +159,7 @@
     setDropSide(null);
     splitDrop.tab = null;
     splitDrop.target = null;
+    splitDrop.bounds = null;
   }
 
   function setDropSide(side, cursorX = 0, cursorY = 0) {
@@ -175,7 +178,9 @@
         continue;
       }
 
-      const box = overlay.getBoundingClientRect();
+      // The overlay has the tabbox's bounds. Reusing them avoids a synchronous
+      // layout read after toggling the active zone on every dragover.
+      const box = splitDrop.bounds;
       const w = Math.min(ZONE_ACTIVE_W, box.width * 0.45);
       const h = Math.min(ZONE_ACTIVE_H, box.height * 0.86);
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -195,7 +200,7 @@
   }
 
   function sideAt(event) {
-    const box = gBrowser.tabbox.getBoundingClientRect();
+    const box = splitDrop.bounds || gBrowser.tabbox.getBoundingClientRect();
     if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) {
       return null;
     }
@@ -326,7 +331,7 @@
   }
 
   function isOverPage(event) {
-    const box = gBrowser.tabbox.getBoundingClientRect();
+    const box = splitDrop.bounds || gBrowser.tabbox.getBoundingClientRect();
     const inPage =
       event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
     return inPage && !isOverCollapsedSidebar(event);

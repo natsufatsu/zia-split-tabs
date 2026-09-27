@@ -18,6 +18,10 @@ Restart after enabling, disabling or updating these JavaScript mods. If necessar
 
 The ZIP is a repository-ready package; it is not a Firefox extension/XPI. Repository: https://github.com/natsufatsu/zia-split-tabs
 
+## 1.0.5
+
+The active split target now follows the cursor without the 200 ms movement delay. Drag updates reuse the page bounds measured when the overlay opens, avoiding repeated layout reads while the target moves.
+
 ## 1.0.4
 
 Keeps the animated split targets and uses Zen's rectangular icon-and-title preview over the page. Restores the sidebar-shaped preview when moving back out. Reuses Zen's built-in preview styling, with no screenshots, floating canvas or scroll tracking.
