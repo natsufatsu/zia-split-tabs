@@ -362,10 +362,16 @@
     if (document.getElementById("zen-split-view-drag-image")) return;
     const preview = document.createXULElement("vbox");
     preview.id = "zen-split-view-drag-image";
+    // Windows repaints the drag image in a layered window as the pointer moves.
+    // Keep the icon and title, but use fewer pixels than Zen's 200x250 card.
+    if (Services.appinfo.OS === "WINNT") {
+      preview.setAttribute("zia-compact", "true");
+    }
     const icon = document.createXULElement("image");
     icon.setAttribute("src", splitDrop.tab.getAttribute("image") || "chrome://global/skin/icons/defaultFavicon.svg");
     const label = document.createXULElement("label");
     label.textContent = splitDrop.tab.label;
+    label.setAttribute("crop", "end");
     preview.append(icon, label);
     document.documentElement.appendChild(preview);
     splitDrop.nativePreview = preview;
@@ -376,7 +382,12 @@
       if (splitDrop.nativePreview !== preview || !splitDrop.tab) return;
       const original = gBrowser.tabContainer.tabDragAndDrop?.originalDragImageArgs;
       try {
-        dt.updateDragImage(preview, original?.[1] ?? 16, original?.[2] ?? 16);
+        const compact = preview.hasAttribute("zia-compact");
+        dt.updateDragImage(
+          preview,
+          compact ? 16 : (original?.[1] ?? 16),
+          compact ? 16 : (original?.[2] ?? 16)
+        );
         gBrowser.tabContainer.tabDragAndDrop?.clearDragOverVisuals?.();
       } catch (error) {
         // The drag can end while the update is queued.
