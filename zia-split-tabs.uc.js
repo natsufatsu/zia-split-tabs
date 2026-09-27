@@ -25,6 +25,9 @@
     dragStartedAt: 0,
     side: null,
     bounds: null,
+    renderedSide: null,
+    frame: null,
+    pointer: null,
   };
 
   function draggedTabOf(event) {
@@ -149,6 +152,11 @@
   }
 
   function hideSplitDrop(event) {
+    if (splitDrop.frame !== null) {
+      cancelAnimationFrame(splitDrop.frame);
+      splitDrop.frame = null;
+    }
+    splitDrop.pointer = null;
     restoreNativeTabPreview();
     const overlay = splitDrop.overlay;
     if (!overlay?.hasAttribute("open")) {
@@ -157,24 +165,25 @@
     overlay.removeAttribute("shown");
     overlay.removeAttribute("open");
     setDropSide(null);
+    splitDrop.side = null;
     splitDrop.tab = null;
     splitDrop.target = null;
     splitDrop.bounds = null;
   }
 
   function setDropSide(side, cursorX = 0, cursorY = 0) {
-    splitDrop.side = side;
     const overlay = splitDrop.overlay;
     if (!overlay) {
       return;
     }
-    overlay.toggleAttribute("has-side", !!side);
+    const changed = side !== splitDrop.renderedSide;
+    splitDrop.renderedSide = side;
+    if (changed) overlay.toggleAttribute("has-side", !!side);
     for (const [name, zone] of Object.entries(splitDrop.zones)) {
       const active = name === side;
-      zone.toggleAttribute("active", active);
+      if (changed) zone.toggleAttribute("active", active);
       if (!active) {
-        zone.style.setProperty("--zia-zone-tx", "0px");
-        zone.style.setProperty("--zia-zone-ty", "0px");
+        if (changed) setZoneOffset(zone, "0px", "0px");
         continue;
       }
 
@@ -194,8 +203,18 @@
       }
       const room = Math.max(0, box.height / 2 - h / 2 - 8);
       const ty = clamp((cursorY - (box.top + box.height / 2)) * MAGNET_PULL_Y, -room, room);
-      zone.style.setProperty("--zia-zone-tx", `${tx.toFixed(1)}px`);
-      zone.style.setProperty("--zia-zone-ty", `${ty.toFixed(1)}px`);
+      setZoneOffset(zone, `${tx.toFixed(1)}px`, `${ty.toFixed(1)}px`);
+    }
+  }
+
+  function setZoneOffset(zone, x, y) {
+    // Reading inline style does not flush layout. Avoid identical mutations,
+    // including movements clamped against the same edge.
+    if (zone.style.getPropertyValue("--zia-zone-tx") !== x) {
+      zone.style.setProperty("--zia-zone-tx", x);
+    }
+    if (zone.style.getPropertyValue("--zia-zone-ty") !== y) {
+      zone.style.setProperty("--zia-zone-ty", y);
     }
   }
 
@@ -214,14 +233,24 @@
     return null;
   }
 
-  function followDrag(event) {
-    if (isOverPage(event)) showNativeSplitPreview(event);
+  function followDrag(event, overPage) {
+    if (overPage) showNativeSplitPreview(event);
     else restoreNativeTabPreview();
-    const side = sideAt(event);
+    const side = overPage ? sideAt(event) : null;
     if (side !== splitDrop.side && side) {
       Services.zen?.playHapticFeedback?.();
     }
-    setDropSide(side, event.clientX, event.clientY);
+    splitDrop.side = side;
+    splitDrop.pointer = { x: event.clientX, y: event.clientY };
+    if (splitDrop.frame === null) {
+      splitDrop.frame = requestAnimationFrame(() => {
+        splitDrop.frame = null;
+        const point = splitDrop.pointer;
+        if (point && splitDrop.overlay?.hasAttribute("open")) {
+          setDropSide(splitDrop.side, point.x, point.y);
+        }
+      });
+    }
   }
 
   function onSplitDragOver(event) {
@@ -236,7 +265,8 @@
   function onSplitDrop(event) {
     const tab = splitDrop.tab;
     const target = splitDrop.target;
-    const side = splitDrop.side;
+    // A drop can arrive before the queued paint or at a newer position.
+    const side = isOverPage(event) ? sideAt(event) : null;
     event.preventDefault();
     event.stopPropagation();
     hideSplitDrop(event);
@@ -294,7 +324,7 @@
           if (overPage) {
             gBrowser.tabContainer.tabDragAndDrop?.clearSpaceSwitchTimer?.();
           }
-          followDrag(event);
+          followDrag(event, overPage);
           return;
         }
         if (!overPage) {
@@ -306,7 +336,7 @@
           splitDrop.target = target;
           gBrowser.tabContainer.tabDragAndDrop?.clearSpaceSwitchTimer?.();
           showSplitDrop(tab, event);
-          followDrag(event);
+          followDrag(event, overPage);
           event.preventDefault();
           event.stopPropagation();
         }
